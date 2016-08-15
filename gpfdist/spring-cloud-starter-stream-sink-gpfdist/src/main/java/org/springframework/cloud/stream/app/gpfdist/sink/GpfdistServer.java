@@ -16,23 +16,21 @@
 
 package org.springframework.cloud.stream.app.gpfdist.sink;
 
+import java.time.Duration;
+import java.util.function.Function;
+
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.reactivestreams.Processor;
 import org.reactivestreams.Publisher;
-import reactor.core.processor.RingBufferWorkProcessor;
-import reactor.fn.BiFunction;
-import reactor.fn.Function;
-import reactor.io.buffer.Buffer;
-import reactor.io.net.NetStreams;
-import reactor.io.net.ReactorChannelHandler;
-import reactor.io.net.Spec.HttpServerSpec;
-import reactor.io.net.http.HttpChannel;
-import reactor.io.net.http.HttpServer;
-import reactor.rx.Stream;
-import reactor.rx.Streams;
 
-import java.util.concurrent.TimeUnit;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.WorkQueueProcessor;
+import reactor.ipc.buffer.Buffer;
+import reactor.ipc.netty.common.NettyCodec;
+import reactor.ipc.netty.config.ServerOptions;
+import reactor.ipc.netty.http.HttpChannel;
+import reactor.ipc.netty.http.HttpServer;
 
 /**
  * Server implementation around reactor and netty providing endpoint
@@ -50,7 +48,7 @@ public class GpfdistServer {
 	private final int flushTime;
 	private final int batchTimeout;
 	private final int batchCount;
-	private HttpServer<Buffer, Buffer> server;
+	private HttpServer server;
 	private int localPort = -1;
 
 	/**
@@ -79,7 +77,7 @@ public class GpfdistServer {
 	 * @return the http server
 	 * @throws Exception the exception
 	 */
-	public synchronized HttpServer<Buffer, Buffer> start() throws Exception {
+	public synchronized HttpServer start() throws Exception {
 		if (server == null) {
 			server = createProtocolListener();
 		}
@@ -93,7 +91,7 @@ public class GpfdistServer {
 	 */
 	public synchronized void stop() throws Exception {
 		if (server != null) {
-			server.shutdown().awaitSuccess();
+			server.shutdown().block();
 		}
 		server = null;
 	}
@@ -107,44 +105,26 @@ public class GpfdistServer {
 		return localPort;
 	}
 
-	private HttpServer<Buffer, Buffer> createProtocolListener()
+	private HttpServer createProtocolListener()
 			throws Exception {
 
-		final Stream<Buffer> stream = Streams
-		.wrap(processor)
-		.window(flushCount, flushTime, TimeUnit.SECONDS)
-		.flatMap(new Function<Stream<Buffer>, Publisher<Buffer>>() {
+		WorkQueueProcessor<Buffer> workProcessor = WorkQueueProcessor.create("gpfdist-sink-worker", 8192, false);
 
+		final Flux<Buffer> stream = Flux
+				.from(processor)
+				.window(flushCount, Duration.ofSeconds(flushTime))
+				.flatMap(s ->
+					s.take(Duration.ofSeconds(2))
+					.reduceWith(Buffer::new, Buffer::append))
+				.subscribeWith(workProcessor)
+				.as(Flux::from);
+		HttpServer httpServer = HttpServer.create(ServerOptions.on("0.0.0.0", port));
+//		HttpServer httpServer = HttpServer.create(ServerOptions.on("0.0.0.0", port).eventLoopGroup(new NioEventLoopGroup(10)));
+//		HttpServer httpServer = HttpServer.create(port);
+		httpServer.get("/data", new Function<HttpChannel, Publisher<Void>>() {
 			@Override
-			public Publisher<Buffer> apply(Stream<Buffer> t) {
-
-				return t.reduce(new Buffer(), new BiFunction<Buffer, Buffer, Buffer>() {
-
-					@Override
-					public Buffer apply(Buffer prev, Buffer next) {
-						return prev.append(next);
-					}
-				});
-			}
-		})
-		.process(RingBufferWorkProcessor.<Buffer>create("gpfdist-sink-worker", 8192, false));
-
-		HttpServer<Buffer, Buffer> httpServer = NetStreams
-				.httpServer(new Function<HttpServerSpec<Buffer, Buffer>, HttpServerSpec<Buffer, Buffer>>() {
-
-					@Override
-					public HttpServerSpec<Buffer, Buffer> apply(HttpServerSpec<Buffer, Buffer> server) {
-						return server
-								.codec(new GpfdistCodec())
-								.listen(port);
-					}
-				});
-
-		httpServer.get("/data", new ReactorChannelHandler<Buffer, Buffer, HttpChannel<Buffer,Buffer>>() {
-
-			@Override
-			public Publisher<Void> apply(HttpChannel<Buffer, Buffer> request) {
-				request.responseHeaders().removeTransferEncodingChunked();
+			public Publisher<Void> apply(HttpChannel request) {
+				request.removeTransferEncodingChunked();
 				request.addResponseHeader("Content-type", "text/plain");
 				request.addResponseHeader("Expires", "0");
 				request.addResponseHeader("X-GPFDIST-VERSION", "Spring Dataflow");
@@ -152,15 +132,16 @@ public class GpfdistServer {
 				request.addResponseHeader("Cache-Control", "no-cache");
 				request.addResponseHeader("Connection", "close");
 
-				return request.writeWith(stream
-						.take(batchCount)
-						.timeout(batchTimeout, TimeUnit.SECONDS, Streams.<Buffer>empty())
-						.concatWith(Streams.just(Buffer.wrap(new byte[0]))))
-						.capacity(1l);
+				return request
+						.flushEach()
+							.map(stream
+									.take(batchCount)
+									.timeout(Duration.ofSeconds(batchTimeout), Flux.<Buffer>empty())
+									.concatWith(Flux.just(Buffer.wrap(new byte[0]))), NettyCodec.from(new GpfdistCodec()));
 			}
 		});
 
-		httpServer.start().awaitSuccess();
+		httpServer.start().block();
 		log.info("Server running using address=[" + httpServer.getListenAddress() + "]");
 		localPort = httpServer.getListenAddress().getPort();
 		return httpServer;

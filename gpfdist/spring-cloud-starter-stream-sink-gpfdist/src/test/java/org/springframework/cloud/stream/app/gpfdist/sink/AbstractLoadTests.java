@@ -25,9 +25,12 @@ import org.springframework.context.annotation.AnnotationConfigApplicationContext
 import org.springframework.context.annotation.Bean;
 import org.springframework.data.hadoop.util.net.DefaultHostInfoDiscovery;
 import org.springframework.jdbc.core.JdbcTemplate;
-import reactor.Environment;
-import reactor.core.processor.RingBufferProcessor;
-import reactor.io.buffer.Buffer;
+//import reactor.Environment;
+//import reactor.core.processor.RingBufferProcessor;
+//import reactor.io.buffer.Buffer;
+
+import reactor.core.publisher.WorkQueueProcessor;
+import reactor.ipc.buffer.Buffer;
 
 import java.util.Arrays;
 import java.util.List;
@@ -60,6 +63,7 @@ public abstract class AbstractLoadTests {
 		public ReadableTableFactoryBean greenplumReadableTable() {
 			ReadableTableFactoryBean factory = new ReadableTableFactoryBean();
 			DefaultHostInfoDiscovery discovery = new DefaultHostInfoDiscovery();
+			discovery.setMatchIpv4("172.16.14.1/24");
 			factory.setLocations(Arrays.asList(NetworkUtils.getGPFDistUri(discovery.getHostInfo().getAddress(), 8080)));
 			factory.setFormat(Format.TEXT);
 			return factory;
@@ -90,8 +94,7 @@ public abstract class AbstractLoadTests {
 
 	@Before
 	public void setup() throws Exception {
-		Environment.initializeIfEmpty().assignErrorJournal();
-		processor = RingBufferProcessor.create(false);
+		processor = WorkQueueProcessor.create(false);
 		server = new GpfdistServer(processor, 8080, 1, 1, 1, 10);
 		server.start();
 		context = new AnnotationConfigApplicationContext();

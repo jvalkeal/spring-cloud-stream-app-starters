@@ -17,6 +17,10 @@
 package org.springframework.cloud.stream.app.gpfdist.sink;
 
 import com.codahale.metrics.Meter;
+
+import reactor.core.publisher.WorkQueueProcessor;
+import reactor.ipc.buffer.Buffer;
+
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.reactivestreams.Processor;
@@ -29,9 +33,9 @@ import org.springframework.messaging.MessageHandlingException;
 import org.springframework.scheduling.TaskScheduler;
 import org.springframework.util.StringUtils;
 import org.springframework.util.concurrent.SettableListenableFuture;
-import reactor.Environment;
-import reactor.core.processor.RingBufferProcessor;
-import reactor.io.buffer.Buffer;
+//import reactor.Environment;
+//import reactor.core.processor.RingBufferProcessor;
+//import reactor.io.buffer.Buffer;
 
 import java.util.Date;
 import java.util.concurrent.FutureTask;
@@ -112,8 +116,7 @@ public class GpfdistMessageHandler extends AbstractGpfdistMessageHandler {
 	@Override
 	protected void onInit() throws Exception {
 		super.onInit();
-		Environment.initializeIfEmpty().assignErrorJournal();
-		processor = RingBufferProcessor.create(false);
+		processor = WorkQueueProcessor.create(false);
 	}
 
 	@Override

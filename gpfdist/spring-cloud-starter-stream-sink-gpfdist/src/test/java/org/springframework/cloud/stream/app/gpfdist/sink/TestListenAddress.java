@@ -16,41 +16,25 @@
 
 package org.springframework.cloud.stream.app.gpfdist.sink;
 
-import org.junit.Test;
-import reactor.Environment;
-import reactor.fn.Function;
-import reactor.io.buffer.Buffer;
-import reactor.io.net.NetStreams;
-import reactor.io.net.Spec.HttpServerSpec;
-import reactor.io.net.http.HttpServer;
-
-import java.net.InetSocketAddress;
-
 import static org.hamcrest.Matchers.not;
 import static org.hamcrest.Matchers.notNullValue;
 import static org.junit.Assert.assertThat;
+
+import java.net.InetSocketAddress;
+
+import org.junit.Test;
+
+import reactor.ipc.netty.http.HttpServer;
 
 public class TestListenAddress {
 
 	@Test
 	public void testBindZero() throws Exception {
-		Environment.initializeIfEmpty().assignErrorJournal();
-
-		HttpServer<Buffer, Buffer> httpServer = NetStreams
-				.httpServer(new Function<HttpServerSpec<Buffer, Buffer>, HttpServerSpec<Buffer, Buffer>>() {
-
-					@Override
-					public HttpServerSpec<Buffer, Buffer> apply(HttpServerSpec<Buffer, Buffer> server) {
-						return server
-								.codec(new GpfdistCodec())
-								.listen(0);
-					}
-				});
-		httpServer.start().awaitSuccess();
+		HttpServer httpServer = HttpServer.create(0);
+		httpServer.startAndAwait();
 		InetSocketAddress address = httpServer.getListenAddress();
 		assertThat(address, notNullValue());
 		assertThat(address.getPort(), not(0));
-		httpServer.shutdown();
+		httpServer.shutdown().block();
 	}
-
 }

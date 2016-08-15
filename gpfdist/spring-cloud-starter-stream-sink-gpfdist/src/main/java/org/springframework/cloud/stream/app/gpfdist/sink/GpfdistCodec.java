@@ -16,13 +16,18 @@
 
 package org.springframework.cloud.stream.app.gpfdist.sink;
 
-import reactor.fn.Consumer;
-import reactor.fn.Function;
-import reactor.io.buffer.Buffer;
-import reactor.io.codec.Codec;
+//import reactor.fn.Consumer;
+//import reactor.fn.Function;
+//import reactor.io.buffer.Buffer;
+//import reactor.io.codec.Codec;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
+import java.util.function.Consumer;
+import java.util.function.Function;
+
+import reactor.ipc.buffer.Buffer;
+import reactor.ipc.codec.Codec;
 
 /**
  * Gpfdist related reactor {@link Codec}.
@@ -40,8 +45,13 @@ public class GpfdistCodec extends Codec<Buffer, Buffer, Buffer> {
 			return new Buffer().append(h1).append(h2).append(t).flip();
 	}
 
+//	@Override
+//	public Function<Buffer, Buffer> decoder(Consumer<Buffer> next) {
+//		return null;
+//	}
+
 	@Override
-	public Function<Buffer, Buffer> decoder(Consumer<Buffer> next) {
+	protected Buffer decodeNext(Buffer buffer, Object context) {
 		return null;
 	}
 
