@@ -17,19 +17,16 @@
 package org.springframework.cloud.stream.app.gpfdist.sink;
 
 import java.time.Duration;
-import java.util.function.Function;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.reactivestreams.Processor;
-import org.reactivestreams.Publisher;
 
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.WorkQueueProcessor;
 import reactor.ipc.buffer.Buffer;
 import reactor.ipc.netty.common.NettyCodec;
 import reactor.ipc.netty.config.ServerOptions;
-import reactor.ipc.netty.http.HttpChannel;
 import reactor.ipc.netty.http.HttpServer;
 
 /**
@@ -107,38 +104,34 @@ public class GpfdistServer {
 
 	private HttpServer createProtocolListener()
 			throws Exception {
-
+		final NettyCodec<Buffer, Buffer> codec = NettyCodec.from(new GpfdistCodec());
 		WorkQueueProcessor<Buffer> workProcessor = WorkQueueProcessor.create("gpfdist-sink-worker", 8192, false);
 
 		final Flux<Buffer> stream = Flux
 				.from(processor)
 				.window(flushCount, Duration.ofSeconds(flushTime))
-				.flatMap(s ->
-					s.take(Duration.ofSeconds(2))
+				.flatMap(s -> s
+					.take(Duration.ofSeconds(2))
 					.reduceWith(Buffer::new, Buffer::append))
 				.subscribeWith(workProcessor)
 				.as(Flux::from);
 		HttpServer httpServer = HttpServer.create(ServerOptions.on("0.0.0.0", port));
 //		HttpServer httpServer = HttpServer.create(ServerOptions.on("0.0.0.0", port).eventLoopGroup(new NioEventLoopGroup(10)));
-//		HttpServer httpServer = HttpServer.create(port);
-		httpServer.get("/data", new Function<HttpChannel, Publisher<Void>>() {
-			@Override
-			public Publisher<Void> apply(HttpChannel request) {
-				request.removeTransferEncodingChunked();
-				request.addResponseHeader("Content-type", "text/plain");
-				request.addResponseHeader("Expires", "0");
-				request.addResponseHeader("X-GPFDIST-VERSION", "Spring Dataflow");
-				request.addResponseHeader("X-GP-PROTO", "1");
-				request.addResponseHeader("Cache-Control", "no-cache");
-				request.addResponseHeader("Connection", "close");
 
-				return request
-						.flushEach()
-							.map(stream
-									.take(batchCount)
-									.timeout(Duration.ofSeconds(batchTimeout), Flux.<Buffer>empty())
-									.concatWith(Flux.just(Buffer.wrap(new byte[0]))), NettyCodec.from(new GpfdistCodec()));
-			}
+		httpServer.get("/data", request -> {
+			request.removeTransferEncodingChunked();
+			request.addResponseHeader("Content-type", "text/plain");
+			request.addResponseHeader("Expires", "0");
+			request.addResponseHeader("X-GPFDIST-VERSION", "Spring Dataflow");
+			request.addResponseHeader("X-GP-PROTO", "1");
+			request.addResponseHeader("Cache-Control", "no-cache");
+			request.addResponseHeader("Connection", "close");
+			return request
+					.flushEach()
+					.map(stream
+						.take(batchCount)
+						.timeout(Duration.ofSeconds(batchTimeout), Flux.<Buffer>empty())
+						.concatWith(Flux.just(Buffer.wrap(new byte[0]))), codec);
 		});
 
 		httpServer.start().block();
