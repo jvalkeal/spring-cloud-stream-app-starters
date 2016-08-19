@@ -18,6 +18,7 @@ package org.springframework.cloud.stream.app.gpfdist.sink;
 
 import com.codahale.metrics.Meter;
 
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.WorkQueueProcessor;
 import reactor.ipc.buffer.Buffer;
 
@@ -182,6 +183,10 @@ public class GpfdistMessageHandler extends AbstractGpfdistMessageHandler {
 		} catch (Exception e) {
 			log.warn("Error shutting down protocol listener", e);
 		}
+	}
+
+	public void setXXX(Flux<Message<?>> xxx) {
+		System.out.println("XXXX " + xxx);
 	}
 
 	/**

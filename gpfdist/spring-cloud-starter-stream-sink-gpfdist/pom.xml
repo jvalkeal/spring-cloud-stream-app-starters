@@ -29,6 +29,10 @@
 			<groupId>io.projectreactor.ipc</groupId>
 			<artifactId>reactor-codec</artifactId>
 		</dependency>
+		<dependency>
+			<groupId>org.springframework.cloud</groupId>
+			<artifactId>spring-cloud-stream-reactive</artifactId>
+		</dependency>
 <!--
 		<dependency>
 			<groupId>io.projectreactor</groupId>

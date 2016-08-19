@@ -19,6 +19,8 @@ package org.springframework.cloud.stream.app.gpfdist.sink;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.cloud.stream.annotation.EnableBinding;
+import org.springframework.cloud.stream.annotation.Input;
+import org.springframework.cloud.stream.annotation.StreamListener;
 import org.springframework.cloud.stream.app.gpfdist.sink.support.*;
 import org.springframework.cloud.stream.messaging.Sink;
 import org.springframework.context.annotation.Bean;
@@ -27,9 +29,12 @@ import org.springframework.data.hadoop.util.net.DefaultHostInfoDiscovery;
 import org.springframework.data.hadoop.util.net.HostInfoDiscovery;
 import org.springframework.data.hadoop.util.net.HostInfoDiscovery.HostInfo;
 import org.springframework.integration.annotation.ServiceActivator;
+import org.springframework.messaging.Message;
 import org.springframework.scheduling.TaskScheduler;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 import org.springframework.util.StringUtils;
+
+import reactor.core.publisher.Flux;
 
 import javax.sql.DataSource;
 import java.util.ArrayList;
@@ -129,6 +134,11 @@ public class GpfdistSinkConfiguration {
 		factoryBean.setLoadConfiguration(loadConfiguration);
 		factoryBean.setDataSource(dataSource);
 		return factoryBean;
+	}
+
+	@StreamListener
+	public void receive(@Input(Sink.INPUT) Flux<Message<?>> input) {
+		System.out.println("XXXX " + input);
 	}
 
 	@Bean

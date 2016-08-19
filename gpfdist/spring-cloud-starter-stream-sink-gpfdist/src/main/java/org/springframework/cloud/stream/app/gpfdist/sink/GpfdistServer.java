@@ -21,6 +21,7 @@ import java.time.Duration;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.reactivestreams.Processor;
+import org.reactivestreams.Publisher;
 
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.WorkQueueProcessor;
@@ -39,7 +40,8 @@ public class GpfdistServer {
 
 	private final static Log log = LogFactory.getLog(GpfdistServer.class);
 
-	private final Processor<Buffer, Buffer> processor;
+//	private final Processor<Buffer, Buffer> processor;
+	private final Publisher<Buffer> source;
 	private final int port;
 	private final int flushCount;
 	private final int flushTime;
@@ -58,9 +60,10 @@ public class GpfdistServer {
 	 * @param batchTimeout the batch timeout
 	 * @param batchCount the batch count
 	 */
-	public GpfdistServer(Processor<Buffer, Buffer> processor, int port, int flushCount, int flushTime,
+	public GpfdistServer(/*Processor<Buffer, Buffer> processor*/Publisher<Buffer> source, int port, int flushCount, int flushTime,
 			int batchTimeout, int batchCount) {
-		this.processor = processor;
+//		this.processor = processor;
+		this.source = source;
 		this.port = port;
 		this.flushCount = flushCount;
 		this.flushTime = flushTime;
@@ -108,7 +111,8 @@ public class GpfdistServer {
 		WorkQueueProcessor<Buffer> workProcessor = WorkQueueProcessor.create("gpfdist-sink-worker", 8192, false);
 
 		final Flux<Buffer> stream = Flux
-				.from(processor)
+//				.from(processor)
+				.from(source)
 				.window(flushCount, Duration.ofSeconds(flushTime))
 				.flatMap(s -> s
 					.take(Duration.ofSeconds(2))
